@@ -1,0 +1,42 @@
+#!/bin/sh
+
+#Dependancies
+IPTABLES="/sbin/iptables"
+/sbin/depmod -a	 
+/sbin/modprobe ip_tables
+/sbin/modprobe ip_conntrack
+/sbin/modprobe iptable_filter
+/sbin/modprobe iptable_mangle
+/sbin/modprobe iptable_nat
+/sbin/modprobe ipt_LOG
+/sbin/modprobe ipt_limit
+/sbin/modprobe ipt_state
+echo "1" > /proc/sys/net/ipv4/ip_forward
+
+#Set Variables
+Client_IP="10.0.2.4"
+Local_Gateway_IP="10.0.2.6"
+Global_Gateway_IP="10.0.1.5"
+
+Local_Interface='enp0s3'
+Global_Interface='enp0s8'
+
+# flush iptables
+$IPTABLES -F 
+$IPTABLES -X 
+$IPTABLES -F -t nat
+
+#Default Whitelist Configuration
+$IPTABLES -P INPUT DROP
+$IPTABLES -P OUTPUT DROP
+$IPTABLES -P FORWARD DROP
+
+#Allow Masqueraded ping traffic from client to 8.8.8.8
+
+$IPTABLES -A FORWARD -i $Local_Interface -o $Global_Interface -s $Client_IP -d 8.8.8.8 -p icmp -j ACCEPT
+$IPTABLES -A FORWARD -i $Global_Interface -o $Local_Interface -s 8.8.8.8 -d $Client_IP -p icmp -j ACCEPT
+$IPTABLES -t nat -A POSTROUTING -o $Global_Interface -s $Client_IP -j SNAT --to-source $Global_Gateway_IP
+
+#Allow client to access demo website
+$IPTABLES -A INPUT -s $Client_IP -p tcp --dport 80 -d $Local_Gateway_IP -j ACCEPT
+$IPTABLES -A OUTPUT -d $Client_IP -p tcp --sport 80 -s $Local_Gateway_IP -j ACCEPT
